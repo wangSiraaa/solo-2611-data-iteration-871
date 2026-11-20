@@ -21,7 +21,10 @@ from pathlib import Path
 
 from .catalog import Catalog
 from .codec import path_str
+from .demand import demand_for_task
 from .ingest import TaskRepository
+from .quota import registry_from_catalog
+from .quota_ledger import QuotaLedger
 
 
 def _print(obj) -> None:
@@ -82,6 +85,26 @@ def main(argv: list[str] | None = None) -> int:
     p_rows.add_argument("catalog_db")
     p_rows.add_argument("task_id")
 
+    # ---- 额度池 / 离线额度单 ---- #
+    p_pools = sub.add_parser("pools", help="构建并查看产品的额度池身份目录")
+    p_pools.add_argument("db")
+    p_pools.add_argument("product")
+    p_pools.add_argument("doc")
+    p_pools.add_argument("--version", type=int)
+
+    p_demand = sub.add_parser("demand", help="按换算约定计算任务批次的工时/托位需求")
+    p_demand.add_argument("catalog_db")
+    p_demand.add_argument("task_db")
+    p_demand.add_argument("task_id")
+
+    p_weekly = sub.add_parser("weekly", help="按池周结三笔量（已结算/已划未用/可再分配）")
+    p_weekly.add_argument("ledger_db")
+    p_weekly.add_argument("period")
+
+    p_receipts = sub.add_parser("receipts", help="列出中心拒收回执")
+    p_receipts.add_argument("ledger_db")
+    p_receipts.add_argument("--station", default=None)
+
     args = parser.parse_args(argv)
 
     if args.cmd == "publish":
@@ -97,7 +120,17 @@ def main(argv: list[str] | None = None) -> int:
         )
         return 0
 
-    is_task_cmd = args.cmd in ("run-task", "tasks", "rows")
+    # 纯账本命令（不需要目录连接）
+    if args.cmd == "weekly":
+        with QuotaLedger(args.ledger_db) as ledger:
+            _print(ledger.weekly_reconciliation(args.period))
+        return 0
+    if args.cmd == "receipts":
+        with QuotaLedger(args.ledger_db) as ledger:
+            _print(ledger.list_receipts(args.station))
+        return 0
+
+    is_task_cmd = args.cmd in ("run-task", "tasks", "rows", "demand")
     catalog_db = args.catalog_db if is_task_cmd else args.db
     with Catalog(catalog_db) as cat:
         if args.cmd == "products":
@@ -132,6 +165,8 @@ def main(argv: list[str] | None = None) -> int:
             )
         elif args.cmd == "verify":
             _print(cat.verify(args.product, args.version))
+        elif args.cmd == "pools":
+            _print(registry_from_catalog(cat, args.product, args.doc, args.version).as_dict())
         elif is_task_cmd:
             with TaskRepository(args.task_db, cat) as repo:
                 if args.cmd == "run-task":
@@ -141,7 +176,7 @@ def main(argv: list[str] | None = None) -> int:
                     _print(summary.__dict__ | {"partitions": summary.partitions})
                 elif args.cmd == "tasks":
                     _print([s.__dict__ for s in repo.list_tasks()])
-                else:
+                elif args.cmd == "rows":
                     _print(
                         {
                             "summary": repo.get_task(args.task_id).__dict__,
@@ -150,6 +185,8 @@ def main(argv: list[str] | None = None) -> int:
                             "rows": repo.get_rows(args.task_id),
                         }
                     )
+                elif args.cmd == "demand":
+                    _print(demand_for_task(repo, cat, args.task_id).as_dict())
     return 0
 
 

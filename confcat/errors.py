@@ -67,3 +67,33 @@ class TaskRejected(ConfCatError):
         self.reason = reason
         prefix = f"[{'/'.join(str(p) for p in self.path)}] " if self.path else ""
         super().__init__(f"{prefix}{message}")
+
+
+# --------------------------------------------------------------------------- #
+# 额度池 / 离线额度单
+# --------------------------------------------------------------------------- #
+class QuotaConfigError(ConfCatError):
+    """额度池配置合同违规（缺键、错误类型、池身份冲突等）。"""
+
+    def __init__(self, message: str, path: tuple = (), reason: str = ""):
+        self.path = tuple(path)
+        self.reason = reason
+        prefix = f"[{'/'.join(str(p) for p in self.path)}] " if self.path else ""
+        super().__init__(f"{prefix}{message}")
+
+
+class QuotaOverAllocated(ConfCatError):
+    """中心划单时超过池可再分配余额（共享池经别名也不能超额划出）。"""
+
+
+class TicketError(ConfCatError):
+    """额度单状态非法：不存在、不属于本站、已关闭/已过期等。"""
+
+
+class OfflineRejected(ConfCatError):
+    """离线承诺被本地拒收；同时生成可复核回执，两种资源均不扣。"""
+
+    def __init__(self, message: str, reason: str, context: dict | None = None):
+        self.reason = reason
+        self.context = context or {}
+        super().__init__(message)

@@ -1,0 +1,81 @@
+# 额度池产品样例：每个 CSV 接入站声明可用的分拣工时（hours）与托盘位（pallets）。
+# 关键合同：限额“相等”不代表同一个池——身份由锚点/别名链决定，不由数字决定。
+#
+#   * 两个分站经别名指向同一锚点  => 同一池的两种读法（共 5，不是各 5）；
+#   * 两个分站各自写显式独立池    => 即使同值也是两个池（各 5，可各领 3）；
+#   * merge 读法与直接别名读法同身份（同一锚点），显式覆盖只改值不改锚点身份。
+
+quota:
+  # 结算周期：额度单、承诺、周结三笔量全部绑定该周期
+  period: "2026-W47"
+
+  # ---- 锚点池：共享工时池（两座分站看到的是同一个 5 小时池）---- #
+  shared_hours: &shared_hours
+    name: shared-sorting-hours
+    warehouse: WH-CENTER
+    limit: 5
+
+  # ---- 锚点池：B 站托位池（merge 读法的身份来源）---- #
+  pallet_pool_b: &pallet_pool_b
+    name: pallet-pool-b
+    warehouse: WH-B
+    limit: 4
+
+  station-a:
+    # 直接别名：与 station-b 的 hours 同锚点 => 同一 pool_id
+    hours: *shared_hours
+    # 独立显式池：限额 4 与 B 站锚点池同值，但无别名链 => 两个 pool_id，禁止合并
+    pallets:
+      name: pallet-pool-a-standalone
+      warehouse: WH-A
+      limit: 4
+
+  station-b:
+    # merge 读法：锚点仍是 shared_hours => 与 station-a 工时同池（共 5）
+    hours:
+      <<: *shared_hours
+    # merge 到 B 的托位锚点：与 A 站显式池同限额 4，却因锚点不同而是另一个池
+    pallets:
+      <<: *pallet_pool_b
+
+  # ---- 对照分站：两个资源都是显式独立池，同值也独立 ---- #
+  station-c:
+    hours:
+      name: independent-hours-c
+      warehouse: WH-C
+      limit: 5
+    pallets:
+      name: independent-pallets-c
+      warehouse: WH-C
+      limit: 5
+
+# 换算约定：消费仓按真实 CSV 任务明细逐行计算一批任务同时所需的工时与托位。
+# key_column 命中 rules 走专用行，否则走 defaults；都未登记则整批拒绝。
+conversion:
+  key_column: channel
+  defaults:
+    hours_per_row: 1
+    pallets_per_row: 1
+  rules:
+    web:
+      hours_per_row: 2
+      pallets_per_row: 2
+    app:
+      hours_per_row: 1
+      pallets_per_row: 1
+  batch:
+    # 每满 3 行，托位小计可向下归并一次（归并后再加余数）
+    pallets_divisor: 3
+
+# 保留接入任务所需的 ingest 段，使同一产品既能跑 CSV 接入又能跑额度复核
+ingest:
+  source_uri: file:///data/quota_tasks.csv
+  column_mapping:
+    task_ref: oid
+    region_name: region
+    channel: chan
+  missing_value:
+    token: "NA"
+    default: unknown
+  partition_by:
+    - channel
