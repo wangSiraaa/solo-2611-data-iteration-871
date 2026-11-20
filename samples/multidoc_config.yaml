@@ -1,0 +1,36 @@
+# 多文档流：两个文档使用同名锚点 &shared，但作用域仅限本文档，互不影响。
+# 发布为同一产品的两个命名文档：doc-eu / doc-us。
+---
+doc: eu
+shared: &shared
+  currency: EUR
+  vat: 0.20
+ingest:
+  <<: *shared
+  source_uri: file:///data/orders_eu.csv
+  column_mapping:
+    order_id: oid
+    region_name: region
+    channel: chan
+  missing_value:
+    token: "NA"
+    default: unknown-eu
+  partition_by:
+    - channel
+---
+doc: us
+shared: &shared
+  currency: USD
+  vat: 0.07
+ingest:
+  <<: *shared
+  source_uri: file:///data/orders_us.csv
+  column_mapping:
+    order_id: oid
+    region_name: region
+    channel: chan
+  missing_value:
+    token: "NA"
+    default: unknown-us
+  partition_by:
+    - channel

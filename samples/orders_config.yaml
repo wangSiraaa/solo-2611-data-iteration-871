@@ -1,0 +1,58 @@
+# 受限 YAML 合同样例：单文档，聚焦锚点/别名/merge/标量类型。
+# 该文件同时作为目录产品 "orders-product" 的配置源。
+
+defaults: &defaults
+  region: cn
+  tier: standard
+  # 同名子映射用于验证“merge 不递归合并”：被整体占位而非深度合并
+  options:
+    timeout: 30
+    retries: 3
+
+priority_a: &priority_a
+  tier: premium
+  coupon: A1
+  options:
+    timeout: 9
+
+priority_b: &priority_b
+  tier: platinum
+  coupon: B2
+  note: from-b
+
+ingest:
+  # merge 序列：从左到右，第一个提供的键胜出
+  <<:
+    - *priority_a
+    - *priority_b
+    - *defaults
+  # 显式键恒覆盖 merge，即使它出现在 << 之后
+  coupon: EXPLICIT-WINS
+  source_uri: file:///data/orders.csv
+  column_mapping:
+    order_id: oid
+    region_name: region
+    channel: chan
+  missing_value:
+    token: "NA"
+    default: unknown
+  partition_by:
+    - channel
+
+scalar_contract:
+  leading_zero: 001        # 字符串，不转整数
+  yes_word: yes            # 字符串，不转布尔
+  iso_date: 2026-11-18     # 字符串，不转日期
+  decimal: 42              # 整数
+  negative: -7             # 整数
+  zero: 0                  # 整数
+  flag_on: true            # 布尔
+  flag_off: false          # 布尔
+  nothing: null            # None
+  quoted_bool: "true"      # 字符串
+  empty_scalar:            # null
+
+typed_keys:
+  1: integer-key
+  "1": string-key
+  2: another-integer

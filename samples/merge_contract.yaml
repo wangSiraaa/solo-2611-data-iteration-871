@@ -1,0 +1,32 @@
+# merge 合同专项样例：显式键出现在 << 之前也要覆盖；单映射 merge；嵌套不递归。
+---
+base_map: &base_map
+  keep: base-keep
+  override_me: base-value
+  nested:
+    a: 1
+    b: 2
+
+case_explicit_before:
+  # 显式键先出现，merge 在后：显式键仍然胜出（与文本位置无关）
+  override_me: explicit-first
+  <<: *base_map
+
+case_explicit_after:
+  <<: *base_map
+  override_me: explicit-last
+
+case_single_merge:
+  <<: *base_map
+  extra: mine
+
+case_no_recursive:
+  # nested 是同名子映射：整体取先到者，不做 a/b 级深度合并
+  nested:
+    c: 3
+  <<: *base_map
+
+case_quoted_merge_marker:
+  # 引号包裹的 "<<" 是普通字符串键，不触发 merge
+  "<<": not-a-merge
+  real: value
